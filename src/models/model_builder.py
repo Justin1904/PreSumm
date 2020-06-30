@@ -1,13 +1,16 @@
 import copy
 
+import os
 import torch
+import warnings
 import torch.nn as nn
-from pytorch_transformers import BertModel, BertConfig
+from pytorch_transformers import BertModel, BertConfig  # noqa
 from torch.nn.init import xavier_uniform_
 
 from models.decoder import TransformerDecoder
 from models.encoder import Classifier, ExtTransformerEncoder
 from models.optimizers import Optimizer
+from models.tnlrv3 import BertForQuestionAnswering as TNLRv3ForQuestionAnswering
 
 def build_optim(args, model, checkpoint):
     """ Build optimizer """
@@ -113,12 +116,19 @@ def get_generator(vocab_size, dec_hidden_size, device):
     return generator
 
 class Bert(nn.Module):
-    def __init__(self, large, temp_dir, finetune=False):
+    def __init__(self, model_type, temp_dir, finetune=False, weights_path=None, local_rank=-1, sparse=False):
         super(Bert, self).__init__()
-        if(large):
-            self.model = BertModel.from_pretrained('bert-large-uncased', cache_dir=temp_dir)
-        else:
-            self.model = BertModel.from_pretrained('bert-base-uncased', cache_dir=temp_dir)
+        if model_type.startswith('bert'):
+            self.model = BertModel.from_pretrained(model_type, cache_dir=temp_dir)
+            if sparse:
+                warnings.warn("Model type is Bert but sparse = True. This will have no effect.")
+        elif model_type.startswith('tnlrv3'):
+            if weights_path is None: warnings.warn("Model type is TNLRv3 but weights_path is not specified. This may cause unexpected behaviors")
+            qa_model, _ = TNLRv3ForQuestionAnswering.from_pretrained(
+                'bert-base-uncased', hub_path=None, warmup_checkpoint=weights_path, remove_task_specifical_layers=False, no_segment=False,
+                rel_pos_type=2, max_rel_pos=128, rel_pos_bins=32, fast_qkv=False,
+                hidden_dropout_prob=0.1, attention_probs_dropout_prob=0.1, task_dropout_prob=0.1,
+                cache_dir=os.path.join(temp_dir, 'distributed_{}'.format(local_rank)), sparse=sparse)
 
         self.finetune = finetune
 
@@ -137,7 +147,7 @@ class ExtSummarizer(nn.Module):
         super(ExtSummarizer, self).__init__()
         self.args = args
         self.device = device
-        self.bert = Bert(args.large, args.temp_dir, args.finetune_bert)
+        self.bert = Bert(args.model_type, args.temp_dir, args.finetune_bert, args.weights_path, args.local_rank, args.sparse)
 
         self.ext_layer = ExtTransformerEncoder(self.bert.model.config.hidden_size, args.ext_ff_size, args.ext_heads,
                                                args.ext_dropout, args.ext_layers)
@@ -147,6 +157,8 @@ class ExtSummarizer(nn.Module):
             self.bert.model = BertModel(bert_config)
             self.ext_layer = Classifier(self.bert.model.config.hidden_size)
 
+        # NOTE (Zhun): seems to replicate the LAST position embedding many times. I wonder how this compares to the Longformer-style replication
+        # TODO (Zhun): for TNLRv3 may need to make this optional, since it does not (or does it?) have absolute embeddings
         if(args.max_pos>512):
             my_pos_embeddings = nn.Embedding(args.max_pos, self.bert.model.config.hidden_size)
             my_pos_embeddings.weight.data[:512] = self.bert.model.embeddings.position_embeddings.weight.data
@@ -180,7 +192,7 @@ class AbsSummarizer(nn.Module):
         super(AbsSummarizer, self).__init__()
         self.args = args
         self.device = device
-        self.bert = Bert(args.large, args.temp_dir, args.finetune_bert)
+        self.bert = Bert(args.model_type, args.temp_dir, args.finetune_bert)
 
         if bert_from_extractive is not None:
             self.bert.model.load_state_dict(

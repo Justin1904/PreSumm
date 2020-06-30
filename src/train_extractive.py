@@ -214,18 +214,18 @@ def train_single_ext(args, device_id):
     torch.backends.cudnn.deterministic = True
 
     if device_id >= 0:
-        torch.cuda.set_device(device_id)
-        torch.cuda.manual_seed(args.seed)
+        torch.cuda.set_device(device_id)  # NOTE (Zhun): <-- what exactly does set_device do?
+        torch.cuda.manual_seed(args.seed)  # NOTE (Zhun): <-- why not manual_seed_all()?
 
-    torch.manual_seed(args.seed)
+    torch.manual_seed(args.seed)  # NOTE (Zhun): <-- setting seeds again?
     random.seed(args.seed)
     torch.backends.cudnn.deterministic = True
 
     if args.train_from != '':
         logger.info('Loading checkpoint from %s' % args.train_from)
         checkpoint = torch.load(args.train_from,
-                                map_location=lambda storage, loc: storage)
-        opt = vars(checkpoint['opt'])
+                                map_location=lambda storage, loc: storage)  # NOTE (Zhun): <-- how does passing in a function to map_location work?
+        opt = vars(checkpoint['opt'])  # NOTE (Zhun): <-- is this getting the cmd arguments from checkpoints and update them?
         for k in opt.keys():
             if (k in model_flags):
                 setattr(args, k, opt[k])
@@ -236,6 +236,7 @@ def train_single_ext(args, device_id):
         return data_loader.Dataloader(args, load_dataset(args, 'train', shuffle=True), args.batch_size, device,
                                       shuffle=True, is_test=False)
 
+    args.local_rank = device_id
     model = ExtSummarizer(args, device, checkpoint)
     optim = model_builder.build_optim(args, model, checkpoint)
 
