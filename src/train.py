@@ -112,7 +112,7 @@ if __name__ == '__main__':
     parser.add_argument("-sparse", type=str2bool, default=False)
     parser.add_argument("-weights_path", type=str, default=None)
 
-    args.parser.parse_known_args()
+    # args.parser.parse_known_args()
     args = parser.parse_args()
     args.gpu_ranks = [int(i) for i in range(len(args.visible_gpus.split(',')))]
     args.world_size = len(args.gpu_ranks)

@@ -4,7 +4,7 @@ import os
 import torch
 import warnings
 import torch.nn as nn
-from pytorch_transformers import BertModel, BertConfig  # noqa
+from transformers import BertModel, BertConfig  # noqa
 from torch.nn.init import xavier_uniform_
 
 from models.decoder import TransformerDecoder
@@ -129,16 +129,18 @@ class Bert(nn.Module):
                 rel_pos_type=2, max_rel_pos=128, rel_pos_bins=32, fast_qkv=False,
                 hidden_dropout_prob=0.1, attention_probs_dropout_prob=0.1, task_dropout_prob=0.1,
                 cache_dir=os.path.join(temp_dir, 'distributed_{}'.format(local_rank)), sparse=sparse)
+            self.model = copy.deepcopy(qa_model.bert)
+            del(qa_model)
 
         self.finetune = finetune
 
     def forward(self, x, segs, mask):
         if(self.finetune):
-            top_vec, _ = self.model(x, segs, attention_mask=mask)
+            top_vec, _ = self.model(x, segs, attention_mask=mask, output_all_encoded_layers=False)
         else:
             self.eval()
             with torch.no_grad():
-                top_vec, _ = self.model(x, segs, attention_mask=mask)
+                top_vec, _ = self.model(x, segs, attention_mask=mask, output_all_encoded_layers=False)
         return top_vec
 
 
