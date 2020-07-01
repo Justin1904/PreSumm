@@ -160,13 +160,19 @@ class ExtSummarizer(nn.Module):
             self.ext_layer = Classifier(self.bert.model.config.hidden_size)
 
         # NOTE (Zhun): seems to replicate the LAST position embedding many times. I wonder how this compares to the Longformer-style replication
-        # TODO (Zhun): for TNLRv3 may need to make this optional, since it does not (or does it?) have absolute embeddings
-        if(args.max_pos>512):
-            my_pos_embeddings = nn.Embedding(args.max_pos, self.bert.model.config.hidden_size)
-            my_pos_embeddings.weight.data[:512] = self.bert.model.embeddings.position_embeddings.weight.data
-            my_pos_embeddings.weight.data[512:] = self.bert.model.embeddings.position_embeddings.weight.data[-1][None,:].repeat(args.max_pos-512,1)
-            self.bert.model.embeddings.position_embeddings = my_pos_embeddings
 
+        def extend_position_embedding(model, max_position):
+            original_max_pos = model.embeddings.position_embeddings.weight.size(0)
+            extend_multiples = max(1, max_position // original_max_pos)
+            model.embeddings.position_embeddings.weight.data = model.embeddings.position_embeddings.weight.repeat(extend_multiples, 1)
+            print(f"Extended position embeddings to {original_max_pos * extend_multiples}")
+
+        if(args.max_pos>512):
+            # my_pos_embeddings = nn.Embedding(args.max_pos, self.bert.model.config.hidden_size)
+            # my_pos_embeddings.weight.data[:512] = self.bert.model.embeddings.position_embeddings.weight.data
+            # my_pos_embeddings.weight.data[512:] = self.bert.model.embeddings.position_embeddings.weight.data[-1][None,:].repeat(args.max_pos-512,1)
+            # self.bert.model.embeddings.position_embeddings = my_pos_embeddings
+            extend_position_embedding(self.bert.model, args.max_pos)
 
         if checkpoint is not None:
             self.load_state_dict(checkpoint['model'], strict=True)
