@@ -2,6 +2,7 @@ import bisect
 import gc
 import glob
 import random
+import math
 
 import torch
 
@@ -10,9 +11,10 @@ from others.logging import logger
 
 
 class Batch(object):
-    def _pad(self, data, pad_id, width=-1):
+    def _pad(self, data, pad_id, width=-1, blocksize=64):
         if (width == -1):
             width = max(len(d) for d in data)
+        width = math.ceil(width / blocksize) * blocksize  # pad to the smallest next multiple of blocksize
         rtn_data = [d + [pad_id] * (width - len(d)) for d in data]
         return rtn_data
 
