@@ -105,6 +105,7 @@ class ErrorHandler(object):
 
 def validate_ext(args, device_id):
     timestep = 0
+    args.local_rank = device_id
     if (args.test_all):
         cp_files = sorted(glob.glob(os.path.join(args.model_path, 'model_step_*.pt')))
         cp_files.sort(key=os.path.getmtime)
@@ -174,6 +175,7 @@ def validate(args, device_id, pt, step):
 
 
 def test_ext(args, device_id, pt, step):
+    args.local_rank = device_id
     device = "cpu" if args.visible_gpus == '-1' else "cuda"
     if (pt != ''):
         test_from = pt
@@ -235,7 +237,6 @@ def train_single_ext(args, device_id):
     def train_iter_fct():
         return data_loader.Dataloader(args, load_dataset(args, 'train', shuffle=True), args.batch_size, device,
                                       shuffle=True, is_test=False)
-
     args.local_rank = device_id
     model = ExtSummarizer(args, device, checkpoint)
     optim = model_builder.build_optim(args, model, checkpoint)
