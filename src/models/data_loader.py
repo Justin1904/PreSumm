@@ -11,10 +11,10 @@ from others.logging import logger
 
 
 class Batch(object):
-    def _pad(self, data, pad_id, width=-1, blocksize=64):
+    def _pad(self, data, pad_id, width=-1, stride=512):
         if (width == -1):
             width = max(len(d) for d in data)
-        width = math.ceil(width / blocksize) * blocksize  # pad to the smallest next multiple of blocksize
+        width = math.ceil(width / stride) * stride  # pad to the smallest next multiple of stride
         rtn_data = [d + [pad_id] * (width - len(d)) for d in data]
         return rtn_data
 
