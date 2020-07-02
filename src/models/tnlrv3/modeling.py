@@ -341,7 +341,7 @@ class BertSelfAttention(nn.Module):
         # init sparse attention
         if hasattr(config, 'sparse') and config.sparse:
             self.sparse = True
-            self.sparse_self_attention = build_sparse_attn("fixed", 16, 64, "bidirectional", 4, 1)
+            self.sparse_self_attention = build_sparse_attn("fixed", 16, 512, "bidirectional", 4, 1)
         else:
             self.sparse = False
             self.sparse_self_attention = None
