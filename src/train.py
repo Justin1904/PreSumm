@@ -23,8 +23,6 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-task", default='ext', type=str, choices=['ext', 'abs'])
@@ -40,7 +38,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-max_pos", default=512, type=int)
     parser.add_argument("-use_interval", type=str2bool, nargs='?',const=True,default=True)
-    parser.add_argument("-model_type", type=str, choices=['bert-base-uncased', 'bert-large-uncased', 'tnlrv3-base-uncased'], nargs='?', default='bert-base-uncased')
+    parser.add_argument("-model_type", type=str, choices=['bert-base-uncased', 'bert-large-uncased', 'tnlrv3-base-uncased', 'tnlrv3-large-uncased'], nargs='?', default='bert-base-uncased')
     parser.add_argument("-load_from_extractive", default='', type=str)
 
     parser.add_argument("-sep_optim", type=str2bool, nargs='?',const=True,default=False)

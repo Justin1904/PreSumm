@@ -123,9 +123,10 @@ class Bert(nn.Module):
             if sparse:
                 warnings.warn("Model type is Bert but sparse = True. This will have no effect.")
         elif model_type.startswith('tnlrv3'):
+            model_size = model_type.split('-')[1]
             if weights_path is None: warnings.warn("Model type is TNLRv3 but weights_path is not specified. This may cause unexpected behaviors")
             qa_model, _ = TNLRv3ForQuestionAnswering.from_pretrained(
-                'bert-base-uncased', hub_path=None, warmup_checkpoint=weights_path, remove_task_specifical_layers=False, no_segment=False,
+                f'bert-{model_size}-uncased', hub_path=None, warmup_checkpoint=weights_path, remove_task_specifical_layers=False, no_segment=False,
                 rel_pos_type=2, max_rel_pos=128, rel_pos_bins=32, fast_qkv=False,
                 hidden_dropout_prob=0.1, attention_probs_dropout_prob=0.1, task_dropout_prob=0.1,
                 cache_dir=os.path.join(temp_dir, 'distributed_{}'.format(local_rank)), sparse=sparse)
