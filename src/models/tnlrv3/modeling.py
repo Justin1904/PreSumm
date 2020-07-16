@@ -544,7 +544,7 @@ class BertEncoder(nn.Module):
             self.rel_pos_bias = nn.Linear(
                 self.rel_pos_onehot_size, config.num_attention_heads, bias=False)
 
-    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True, output_attention=False, position_ids=None):
+    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=False, output_attention=False, position_ids=None):
         # if self.training:
         #     print(self.rel_pos_bias.weight.data[0, -2:].tolist())
         rel_pos, predict_rel_pos = None, None
@@ -917,7 +917,7 @@ class BertModel(BertPreTrainedModel):
 
       Outputs: Tuple of (encoded_layers, pooled_output)
           `encoded_layers`: controled by `output_all_encoded_layers` argument:
-              - `output_all_encoded_layers=True`: outputs a list of the full sequences of encoded-hidden-states at the end
+              - `output_all_encoded_layers=False`: outputs a list of the full sequences of encoded-hidden-states at the end
                   of each attention block (i.e. 12 full sequences for BERT-base, 24 for BERT-large), each
                   encoded-hidden-state is a torch.FloatTensor of size [batch_size, sequence_length, hidden_size],
               - `output_all_encoded_layers=False`: outputs only the full sequence of hidden-states corresponding
@@ -950,7 +950,7 @@ class BertModel(BertPreTrainedModel):
         self.apply(self.init_bert_weights)
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None,
-                output_all_encoded_layers=True, output_attention=False):
+                output_all_encoded_layers=False, output_attention=False):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
         if token_type_ids is None:
