@@ -109,6 +109,7 @@ if __name__ == '__main__':
     # args for TNLRv3
     parser.add_argument("-sparse", type=str2bool, default=False)
     parser.add_argument("-weights_path", type=str, default=None)
+    parser.add_argument("--checkpoint_segment", type=int, default=0)
 
     # args.parser.parse_known_args()
     args = parser.parse_args()

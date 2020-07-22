@@ -116,7 +116,7 @@ def get_generator(vocab_size, dec_hidden_size, device):
     return generator
 
 class Bert(nn.Module):
-    def __init__(self, model_type, temp_dir, finetune=False, weights_path=None, local_rank=-1, sparse=False):
+    def __init__(self, model_type, temp_dir, finetune=True, weights_path=None, local_rank=-1, sparse=False, checkpoint_segment=0):
         super(Bert, self).__init__()
         if model_type.startswith('bert'):
             self.model = BertModel.from_pretrained(model_type, cache_dir=temp_dir)
@@ -129,7 +129,7 @@ class Bert(nn.Module):
                 f'bert-{model_size}-uncased', hub_path=None, warmup_checkpoint=weights_path, remove_task_specifical_layers=False, no_segment=False,
                 rel_pos_type=2, max_rel_pos=128, rel_pos_bins=32, fast_qkv=False,
                 hidden_dropout_prob=0.1, attention_probs_dropout_prob=0.1, task_dropout_prob=0.1,
-                cache_dir=os.path.join(temp_dir, 'distributed_{}'.format(local_rank)), sparse=sparse)
+                cache_dir=os.path.join(temp_dir, 'distributed_{}'.format(local_rank)), sparse=sparse, checkpoint_segment=checkpoint_segment)
             self.model = copy.deepcopy(qa_model.bert)
             del(qa_model)
 
@@ -137,6 +137,7 @@ class Bert(nn.Module):
 
     def forward(self, x, segs, mask):
         if(self.finetune):
+            # import pdb; pdb.set_trace()
             top_vec, _ = self.model(x, token_type_ids=segs, attention_mask=mask)
         else:
             self.eval()
@@ -150,7 +151,7 @@ class ExtSummarizer(nn.Module):
         super(ExtSummarizer, self).__init__()
         self.args = args
         self.device = device
-        self.bert = Bert(args.model_type, args.temp_dir, args.finetune_bert, args.weights_path, args.local_rank, args.sparse)
+        self.bert = Bert(args.model_type, args.temp_dir, args.finetune_bert, args.weights_path, args.local_rank, args.sparse, args.checkpoint_segment)
 
         self.ext_layer = ExtTransformerEncoder(self.bert.model.config.hidden_size, args.ext_ff_size, args.ext_heads,
                                                args.ext_dropout, args.ext_layers)
