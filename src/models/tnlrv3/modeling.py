@@ -37,6 +37,7 @@ import torch.nn.functional as F
 
 from .file_utils import cached_path
 from torch_blocksparse import DeepSpeedSparseSelfAttention, SparsityConfig  # noqa
+from torch.utils.checkpoint import checkpoint
 
 def build_sparse_attn(mode, block, stride, unidirectional, numverts, vertsize):
     sparse_attn = DeepSpeedSparseSelfAttention(SparsityConfig(mode, block, stride, unidirectional, numverts, vertsize)).cuda()
@@ -539,12 +540,50 @@ class BertEncoder(nn.Module):
         self.rel_pos_type = config.rel_pos_type
         self.max_rel_pos = config.max_rel_pos
         self.rel_pos_bins = config.rel_pos_bins
+        self.checkpoint_segment = config.checkpoint_segment
         if config.rel_pos_type in (1, 2):
             self.rel_pos_onehot_size = config.rel_pos_bins
             self.rel_pos_bias = nn.Linear(
                 self.rel_pos_onehot_size, config.num_attention_heads, bias=False)
 
-    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=False, output_attention=False, position_ids=None):
+    @staticmethod
+    def compose_layers(layers, output_all_encoded_layers, output_attention):
+        def composed_layers(hidden_states, attention_mask, rel_pos):
+            all_encoder_layers = []
+            all_encoder_attention_probs = []
+            for layer_module in layers:
+                hidden_states, attention_probs = layer_module(
+                    hidden_states, attention_mask,
+                    rel_pos=rel_pos)
+                if output_attention:
+                    all_encoder_attention_probs.append(attention_probs)
+                if output_all_encoded_layers:
+                    all_encoder_layers.append(hidden_states)
+            return hidden_states, all_encoder_attention_probs, all_encoder_layers
+        return composed_layers
+
+    @staticmethod
+    def checkpointed_layers_forward(layers, segment, hidden_states, attention_mask, rel_pos, output_all_encoded_layers, output_attention):
+        all_encoder_layers = []
+        all_encoder_attention_probs = []
+        num_layers = len(layers)
+        step = num_layers // segment
+
+        for i in range(start=0, stop=layers, step=step):
+            segment_layers = layers[i:i+step]
+            composed_layers_forward = BertEncoder.compose_layers(
+                segment_layers, output_all_encoded_layers, output_attention)
+            hidden_states, segment_encoder_attention_probs, segment_encoder_layers = checkpoint(
+                composed_layers_forward, hidden_states, attention_mask, rel_pos, all_encoder_attention_probs, all_encoder_layers)
+
+            if output_attention:
+                all_encoder_attention_probs.extend(
+                    segment_encoder_attention_probs)
+            if output_all_encoded_layers:
+                all_encoder_layers.extend(segment_encoder_layers)
+        return hidden_states, all_encoder_attention_probs, all_encoder_layers
+
+    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True, output_attention=False, position_ids=None):
         # if self.training:
         #     print(self.rel_pos_bias.weight.data[0, -2:].tolist())
         rel_pos, predict_rel_pos = None, None
@@ -559,16 +598,20 @@ class BertEncoder(nn.Module):
             # (B,H,L,L)
             rel_pos = self.rel_pos_bias(rel_pos).permute(0, 3, 1, 2)
 
-        all_encoder_layers = []
-        all_encoder_attention_probs = []
-        for layer_module in self.layer:
-            hidden_states, attention_probs = layer_module(
-                hidden_states, attention_mask,
-                rel_pos=rel_pos)
-            if output_attention:
-                all_encoder_attention_probs.append(attention_probs)
-            if output_all_encoded_layers:
-                all_encoder_layers.append(hidden_states)
+        if self.checkpoint_segment > 0:
+            hidden_states, all_encoder_attention_probs, all_encoder_layers = BertEncoder.checkpointed_layers_forward(
+                self.layer, self.checkpoint_segment, hidden_states, attention_mask, rel_pos, output_all_encoded_layers, output_attention)
+        else:
+            all_encoder_layers = []
+            all_encoder_attention_probs = []
+            for layer_module in self.layer:
+                hidden_states, attention_probs = layer_module(
+                    hidden_states, attention_mask,
+                    rel_pos=rel_pos)
+                if output_attention:
+                    all_encoder_attention_probs.append(attention_probs)
+                if output_all_encoded_layers:
+                    all_encoder_layers.append(hidden_states)
         if not output_all_encoded_layers:
             all_encoder_layers.append(hidden_states)
         return all_encoder_layers, all_encoder_attention_probs
@@ -694,7 +737,7 @@ class BertPreTrainedModel(nn.Module):
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, state_dict=None, cache_dir=None,
-                        warmup_checkpoint=None, hub_path=None, from_tf=False, no_segment=False, rel_pos_type=0, max_rel_pos=128, rel_pos_bins=32, fast_qkv=False, hidden_dropout_prob=0.1, attention_probs_dropout_prob=0.1, task_dropout_prob=0.1, remove_task_specifical_layers=False, keep_cls=True, sparse=False, *inputs, **kwargs):
+                        warmup_checkpoint=None, hub_path=None, from_tf=False, no_segment=False, rel_pos_type=0, max_rel_pos=128, rel_pos_bins=32, fast_qkv=False, hidden_dropout_prob=0.1, attention_probs_dropout_prob=0.1, task_dropout_prob=0.1, remove_task_specifical_layers=False, keep_cls=True, sparse=False, checkpoint_segment=0, *inputs, **kwargs):
         """
             Instantiate a BertPreTrainedModel from a pre-trained model file or a pytorch state dict.
             Download and cache the pre-trained model file if needed.
@@ -788,6 +831,7 @@ class BertPreTrainedModel(nn.Module):
         config.attention_probs_dropout_prob = attention_probs_dropout_prob
         config.task_dropout_prob = task_dropout_prob
         config.sparse = sparse
+        config.checkpoint_segment = checkpoint_segment
         logger.info("Model config {}".format(config))
         # Instantiate model.
         model = cls(config, *inputs, **kwargs)
