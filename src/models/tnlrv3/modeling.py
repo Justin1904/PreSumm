@@ -547,41 +547,52 @@ class BertEncoder(nn.Module):
                 self.rel_pos_onehot_size, config.num_attention_heads, bias=False)
 
     @staticmethod
-    def compose_layers(layers, output_all_encoded_layers, output_attention):
+    # def compose_layers(layers, output_all_encoded_layers, output_attention):
+    def compose_layers(layers):
+        # def composed_layers(hidden_states, attention_mask, rel_pos, all_encoder_attention_probs, all_encoder_layers):
         def composed_layers(hidden_states, attention_mask, rel_pos):
-            all_encoder_layers = []
-            all_encoder_attention_probs = []
+            # all_encoder_layers = []
+            # all_encoder_attention_probs = []
             for layer_module in layers:
                 hidden_states, attention_probs = layer_module(
                     hidden_states, attention_mask,
                     rel_pos=rel_pos)
-                if output_attention:
-                    all_encoder_attention_probs.append(attention_probs)
-                if output_all_encoded_layers:
-                    all_encoder_layers.append(hidden_states)
-            return hidden_states, all_encoder_attention_probs, all_encoder_layers
+                # if output_attention:
+                #     all_encoder_attention_probs.append(attention_probs)
+                # if output_all_encoded_layers:
+                #     all_encoder_layers.append(hidden_states)
+            return hidden_states
         return composed_layers
 
     @staticmethod
-    def checkpointed_layers_forward(layers, segment, hidden_states, attention_mask, rel_pos, output_all_encoded_layers, output_attention):
-        all_encoder_layers = []
-        all_encoder_attention_probs = []
+    # def checkpointed_layers_forward(layers, segment, hidden_states, attention_mask, rel_pos, output_all_encoded_layers, output_attention):
+    def checkpointed_layers_forward(layers, segment, hidden_states, attention_mask, rel_pos):
+        # all_encoder_layers = []
+        # all_encoder_attention_probs = []
         num_layers = len(layers)
-        step = num_layers // segment
+        if segment < 0:
+            step = math.ceil(math.sqrt(num_layers))
+        else:
+            step = num_layers // segment
 
-        for i in range(start=0, stop=layers, step=step):
+        for i in range(0, num_layers, step):
+            # segment_encoder_attention_probs = []
+            # segment_encoder_layers = []
             segment_layers = layers[i:i+step]
             composed_layers_forward = BertEncoder.compose_layers(
-                segment_layers, output_all_encoded_layers, output_attention)
-            hidden_states, segment_encoder_attention_probs, segment_encoder_layers = checkpoint(
-                composed_layers_forward, hidden_states, attention_mask, rel_pos, all_encoder_attention_probs, all_encoder_layers)
+                # segment_layers, output_all_encoded_layers, output_attention)
+                segment_layers)
+            hidden_states = checkpoint(
+                # composed_layers_forward, hidden_states, attention_mask, rel_pos, segment_encoder_attention_probs, segment_encoder_layers)
+                composed_layers_forward, hidden_states, attention_mask, rel_pos)
 
-            if output_attention:
-                all_encoder_attention_probs.extend(
-                    segment_encoder_attention_probs)
-            if output_all_encoded_layers:
-                all_encoder_layers.extend(segment_encoder_layers)
-        return hidden_states, all_encoder_attention_probs, all_encoder_layers
+            # if output_attention:
+            #     all_encoder_attention_probs.extend(
+            #         segment_encoder_attention_probs)
+            # if output_all_encoded_layers:
+            #     all_encoder_layers.extend(segment_encoder_layers)
+        # return hidden_states, all_encoder_attention_probs, all_encoder_layers
+        return hidden_states
 
     def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True, output_attention=False, position_ids=None):
         # if self.training:
@@ -598,9 +609,14 @@ class BertEncoder(nn.Module):
             # (B,H,L,L)
             rel_pos = self.rel_pos_bias(rel_pos).permute(0, 3, 1, 2)
 
-        if self.checkpoint_segment > 0:
-            hidden_states, all_encoder_attention_probs, all_encoder_layers = BertEncoder.checkpointed_layers_forward(
-                self.layer, self.checkpoint_segment, hidden_states, attention_mask, rel_pos, output_all_encoded_layers, output_attention)
+        if self.checkpoint_segment != 0:
+            assert not output_all_encoded_layers and not output_attention, "Checkpointing does not support output_all_encoded_layers or output_attention now"
+            # hidden_states, all_encoder_attention_probs, all_encoder_layers = BertEncoder.checkpointed_layers_forward(
+            #     self.layer, self.checkpoint_segment, hidden_states, attention_mask, rel_pos, output_all_encoded_layers, output_attention)
+            all_encoder_layers = []
+            all_encoder_attention_probs = []
+            hidden_states = BertEncoder.checkpointed_layers_forward(
+                self.layer, self.checkpoint_segment, hidden_states, attention_mask, rel_pos)
         else:
             all_encoder_layers = []
             all_encoder_attention_probs = []
