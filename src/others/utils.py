@@ -51,9 +51,9 @@ def process(params):
     return results_dict
 
 
-def test_rouge(temp_dir, cand, ref):
-    candidates = [line.strip() for line in open(cand, encoding='utf-8')]
-    references = [line.strip() for line in open(ref, encoding='utf-8')]
+def test_rouge(temp_dir, candidates, references):
+    # candidates = [line.strip() for line in open(cand, encoding='utf-8')]
+    # references = [line.strip() for line in open(ref, encoding='utf-8')]
     print(len(candidates))
     print(len(references))
     assert len(candidates) == len(references)

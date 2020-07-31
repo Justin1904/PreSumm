@@ -227,6 +227,8 @@ class Trainer(object):
 
         can_path = '%s_step%d.candidate' % (self.args.result_path, step)
         gold_path = '%s_step%d.gold' % (self.args.result_path, step)
+        candidates = []
+        references = []
         with open(can_path, 'w', encoding='utf-8') as save_pred:
             with open(gold_path, 'w', encoding='utf-8') as save_gold:
                 with torch.no_grad():
@@ -279,15 +281,24 @@ class Trainer(object):
                             if (self.args.recall_eval):
                                 _pred = ' '.join(_pred.split()[:len(batch.tgt_str[i].split())])
 
-                            pred.append(_pred)
-                            gold.append(batch.tgt_str[i])
+                            pred.append(_pred.strip())
+                            gold.append(batch.tgt_str[i].strip())
 
-                        for i in range(len(gold)):
-                            save_gold.write(gold[i].strip() + '\n')
-                        for i in range(len(pred)):
-                            save_pred.write(pred[i].strip() + '\n')
+                        candidates.extend(pred)
+                        references.extend(gold)
+                        # for i in range(len(gold)):
+                        #     save_gold.write(gold[i].strip() + '\n')
+                        # for i in range(len(pred)):
+                        #     save_pred.write(pred[i].strip() + '\n')
+                        # if len(gold) != len(pred):
+                        #     logger.warn("During evaluation got different number of hypotheses and candidates")
+                        # for gold_item, pred_item in zip(gold, pred):
+                        #     save_gold.write(gold_item.strip() + '\n')
+                        #     save_pred.write(pred_item.strip() + '\n')
+
         if (step != -1 and self.args.report_rouge):
-            rouges = test_rouge(self.args.temp_dir, can_path, gold_path)
+            # rouges = test_rouge(self.args.temp_dir, can_path, gold_path)
+            rouges = test_rouge(self.args.temp_dir, candidates, references)
             logger.info('Rouges at step %d \n%s' % (step, rouge_results_to_str(rouges)))
         self._report_step(0, step, valid_stats=stats)
 
