@@ -5,3 +5,4 @@ transformers
 tensorboardX
 triton
 torch-blocksparse
+ninja

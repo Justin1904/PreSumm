@@ -3,8 +3,26 @@
 ## (Zhun) Sparse Transformer + BertSum for Long-sequence Extractive Summarizations
 
 This branch has WIP that updates the extractive BertSum with sparse transformers.
-To run this code you will need CUDA 10.1.
+To run this code you will need CUDA 10.1 and `llvm-9-dev`.
+For Python packages please refer to the `requirements.txt`.
 
+## Experiment Scripts
+
+You'll find experiment scripts under `scripts/`. They are all named in the format of `train_{model_type}_{model_size}_{sparse/dense}.sh`, and each train script has a corresponding `watch_*.sh` script. There are some hard-coded paths pointing to paths on the cluster I'm using, so you may want to change those to yours.
+
+These scripts take 2 arguments - the first being the max length of each document, the second being the name of your experiment. E.g.
+
+```
+bash train_tnlrv3_base_sparse.sh 2048 test_tnlrv3_sparse
+```
+
+As you run an experiment, you can also run the corresponding watch script (using the same arguments you just provided to the train script), to keep watch on the model checkpoint folder and run evaluation when there is a new checkpoint. E.g. to watch and evaluate the checkpoints produced by the train script example above, we can do
+
+```
+bash watch_tnlrv3_base_sparse.sh 2048 test_tnlrv3_sparse
+```
+
+Note that the watch script runs the latest checkpoint in the checkpoint directory each time, so depending on how frequently you checkpoint the models and how fast the evaluation is run, it may not neccessarily evaluate every checkpoint but rather every few other checkpoints. If you want to thoroughly evaluate every checkpoint, there is a `test` mode of the code you can use and there is a `-test_all` argument that, when set, will evaluate all checkpoints in a given directory, but that can only be done after all checkpoints are produced and is quite time consuming. There's a brief example of this at the very end of this README.
 
 **This code is for EMNLP 2019 paper [Text Summarization with Pretrained Encoders](https://arxiv.org/abs/1908.08345)**
 
