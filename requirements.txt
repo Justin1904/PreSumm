@@ -3,3 +3,5 @@ numpy
 pyrouge==0.1.3
 transformers
 tensorboardX
+triton
+torch-blocksparse
